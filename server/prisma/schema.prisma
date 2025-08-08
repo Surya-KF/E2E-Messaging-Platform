@@ -1,0 +1,69 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  phone         String   @unique
+  displayName   String
+  passwordHash  String
+  identityKey   String   // base64 public identity key
+  preKeys       Json     // optional prekey bundle for libsignal
+  sessions      Session[]
+  messagesSent  Message[] @relation("messagesSent")
+  messagesRecv  Message[] @relation("messagesRecv")
+  // Back-relations for 1:1 conversations
+  conversationsAsA Conversation[] @relation("AUser")
+  conversationsAsB Conversation[] @relation("BUser")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  deviceId  String
+  // opaque session state encrypted client-side; server just stores it
+  state     Bytes
+}
+
+model Conversation {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  // For MVP: only 1:1 chats
+  aId       String
+  bId       String
+  a         User      @relation("AUser", fields: [aId], references: [id])
+  b         User      @relation("BUser", fields: [bId], references: [id])
+  messages  Message[]
+  @@unique([aId, bId])
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  createdAt      DateTime @default(now())
+  senderId       String
+  receiverId     String
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  sender         User @relation("messagesSent", fields: [senderId], references: [id])
+  receiver       User @relation("messagesRecv", fields: [receiverId], references: [id])
+  // E2E: ciphertext only, server cannot read
+  ciphertext     Bytes
+  mediaUrl       String?
+  mediaType      String?
+  deliveredAt    DateTime?
+  readAt         DateTime?
+  // Optional server-side duplication key
+  dedupeKey      String? @unique
+  @@index([conversationId])
+}

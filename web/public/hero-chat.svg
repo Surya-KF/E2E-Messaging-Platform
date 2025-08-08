@@ -1,0 +1,47 @@
+<svg width="920" height="640" viewBox="0 0 920 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="60%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#EC4899"/>
+    </linearGradient>
+    <filter id="blur" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="40" />
+    </filter>
+  </defs>
+
+  <!-- Background blobs -->
+  <circle cx="760" cy="120" r="120" fill="#3B82F6" opacity="0.12" filter="url(#blur)"/>
+  <circle cx="140" cy="520" r="140" fill="#EC4899" opacity="0.12" filter="url(#blur)"/>
+
+  <!-- Phone frame -->
+  <rect x="210" y="70" rx="32" ry="32" width="500" height="500" fill="#0B1220" opacity="0.9"/>
+  <rect x="210" y="70" rx="32" ry="32" width="500" height="500" stroke="url(#g1)" stroke-opacity="0.8" stroke-width="2" fill="none"/>
+  <rect x="250" y="120" rx="16" ry="16" width="420" height="400" fill="#0F172A"/>
+
+  <!-- Chat bubbles left -->
+  <g>
+    <rect x="270" y="150" rx="12" ry="12" width="220" height="54" fill="#111827" />
+    <rect x="270" y="212" rx="12" ry="12" width="180" height="44" fill="#111827" />
+  </g>
+
+  <!-- Chat bubbles right -->
+  <g>
+    <rect x="430" y="270" rx="12" ry="12" width="210" height="54" fill="#1D4ED8" />
+    <rect x="380" y="336" rx="12" ry="12" width="260" height="44" fill="#1D4ED8" />
+  </g>
+
+  <!-- Header bar -->
+  <rect x="250" y="120" width="420" height="48" fill="#0B1220"/>
+  <circle cx="276" cy="144" r="10" fill="url(#g1)"/>
+  <rect x="294" y="134" width="120" height="20" rx="10" fill="#1F2937"/>
+
+  <!-- Footer input -->
+  <rect x="260" y="484" width="400" height="24" rx="12" fill="#111827"/>
+  <rect x="260" y="512" width="320" height="8" rx="4" fill="#1F2937"/>
+  <rect x="584" y="506" width="76" height="20" rx="10" fill="#2563EB"/>
+
+  <!-- Small accents -->
+  <rect x="270" y="420" width="110" height="8" rx="4" fill="#1F2937"/>
+  <rect x="388" y="420" width="70" height="8" rx="4" fill="#1F2937"/>
+</svg>
