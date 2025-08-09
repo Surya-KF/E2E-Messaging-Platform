@@ -41,6 +41,7 @@ const LoginSchema = z.object({
 });
 
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 function signToken(userId: string) {
   const secret = process.env.JWT_SECRET || 'dev-secret-change';
@@ -51,6 +52,7 @@ app.post('/auth/register', async (req, res) => {
   try {
     const body = RegisterSchema.parse(req.body);
     const hash = await bcrypt.hash(body.password, 10);
+    const makeAdmin = (await prisma.user.count()) === 0; // first user becomes admin
     const user = await prisma.user.create({
       data: {
         phone: body.phone,
@@ -58,7 +60,9 @@ app.post('/auth/register', async (req, res) => {
         passwordHash: hash,
         identityKey: body.identityKey,
         preKeys: body.preKeys ?? {},
+        isAdmin: makeAdmin,
       },
+      select: { id: true, phone: true, displayName: true, identityKey: true, preKeys: true, isAdmin: true },
     });
 
     // Notify connected clients about the new user
@@ -68,7 +72,7 @@ app.post('/auth/register', async (req, res) => {
     });
 
     const token = signToken(user.id);
-    res.json({ token, user: { id: user.id, phone: user.phone, displayName: user.displayName, identityKey: user.identityKey } });
+    res.json({ token, user });
   } catch (e: any) {
     req.log.error(e);
     res.status(400).json({ error: e.message });
@@ -78,12 +82,44 @@ app.post('/auth/register', async (req, res) => {
 app.post('/auth/login', async (req, res) => {
   try {
     const body = LoginSchema.parse(req.body);
-    const user = await prisma.user.findUnique({ where: { phone: body.phone } });
+    const envPhone = (process.env.ADMIN_PHONE || '').trim();
+    const envPass = process.env.ADMIN_PASSWORD || '';
+
+    // If matches bootstrap admin credentials
+    if (envPhone && envPass && (body.phone === envPhone || body.phone === `+${envPhone}`) && body.password === envPass) {
+      // Ensure user exists and is admin
+      let adminUser = await prisma.user.findUnique({ where: { phone: body.phone.startsWith('+') ? body.phone : envPhone.startsWith('+') ? envPhone : envPhone }, select: { id: true, phone: true, displayName: true, identityKey: true, preKeys: true, passwordHash: true, isAdmin: true } });
+      if (!adminUser) {
+        const hash = await bcrypt.hash(envPass, 10);
+        // simple random identity key
+        const rand = Buffer.from(crypto.randomUUID().replace(/-/g,'').slice(0,32)).toString('base64');
+        adminUser = await prisma.user.create({
+          data: {
+            phone: body.phone.startsWith('+') ? body.phone : envPhone,
+            displayName: 'Admin',
+            passwordHash: hash,
+            identityKey: rand,
+            preKeys: {},
+            isAdmin: true,
+          },
+          select: { id: true, phone: true, displayName: true, identityKey: true, preKeys: true, passwordHash: true, isAdmin: true }
+        });
+      } else if (!adminUser.isAdmin) {
+        await prisma.user.update({ where: { id: adminUser.id }, data: { isAdmin: true } });
+        adminUser.isAdmin = true;
+      }
+      const token = signToken(adminUser.id);
+      const { passwordHash, ...publicUser } = adminUser;
+      return res.json({ token, user: publicUser });
+    }
+
+    const user = await prisma.user.findUnique({ where: { phone: body.phone }, select: { id: true, phone: true, displayName: true, passwordHash: true, identityKey: true, preKeys: true, isAdmin: true } });
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const ok = await bcrypt.compare(body.password, user.passwordHash);
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+    const { passwordHash, ...publicUser } = user;
     const token = signToken(user.id);
-    res.json({ token, user: { id: user.id, phone: user.phone, displayName: user.displayName, identityKey: user.identityKey } });
+    res.json({ token, user: publicUser });
   } catch (e: any) {
     req.log.error(e);
     res.status(400).json({ error: e.message });
@@ -105,6 +141,48 @@ function auth(req: express.Request, res: express.Response, next: express.NextFun
   }
 }
 
+// Admin guard
+async function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const userId = (req as any).userId as string;
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
+  if (!u?.isAdmin) return res.status(403).json({ error: 'Forbidden' });
+  next();
+}
+
+// Admin: list all users (including self) with pagination
+app.get('/admin/users', auth, requireAdmin, async (req, res) => {
+  const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 30));
+  const cursor = (req.query.cursor as string | undefined) || undefined;
+  const list = await prisma.user.findMany({
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: limit + 1,
+    ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
+    select: { id: true, phone: true, displayName: true, createdAt: true, isAdmin: true },
+  });
+  const hasNext = list.length > limit;
+  const items = hasNext ? list.slice(0, -1) : list;
+  const nextCursor = hasNext ? items[items.length - 1].id : null;
+  res.json({ items, nextCursor });
+});
+
+// Admin: delete user
+app.delete('/admin/users/:id', auth, requireAdmin, async (req, res) => {
+  const targetId = req.params.id;
+  // Prevent self-deletion if only admin (optional safeguard)
+  const adminCount = await prisma.user.count({ where: { isAdmin: true } });
+  if (targetId === (req as any).userId && adminCount === 1) {
+    return res.status(400).json({ error: 'Cannot delete the only admin' });
+  }
+  try {
+    await prisma.message.deleteMany({ where: { OR: [{ senderId: targetId }, { receiverId: targetId }] } });
+    await prisma.conversation.deleteMany({ where: { OR: [{ aId: targetId }, { bId: targetId }] } });
+    await prisma.user.delete({ where: { id: targetId } });
+    res.json({ ok: true });
+  } catch (e: any) {
+    return res.status(400).json({ error: 'Delete failed' });
+  }
+});
+
 // Minimal directory service to fetch public identity keys
 app.get('/users/:phone', auth, async (req, res) => {
   const user = await prisma.user.findUnique({ where: { phone: req.params.phone } });
@@ -117,6 +195,7 @@ app.get('/users', auth, async (req, res) => {
   const meId = (req as any).userId as string;
   const limit = Math.min(50, Math.max(1, Number(req.query.limit) || 20));
   const cursor = (req.query.cursor as string | undefined) || undefined;
+  const adminPhoneRaw = (process.env.ADMIN_PHONE || '').replace(/^\+/, '');
 
   const users = await prisma.user.findMany({
     select: { id: true, phone: true, displayName: true, identityKey: true, createdAt: true },
@@ -126,8 +205,12 @@ app.get('/users', auth, async (req, res) => {
     ...(cursor ? { skip: 1, cursor: { id: cursor } } : {}),
   });
   const hasNext = users.length > limit;
-  const items = hasNext ? users.slice(0, -1) : users;
-  const nextCursor = hasNext ? items[items.length - 1].id : null;
+  let items = hasNext ? users.slice(0, -1) : users;
+  // Filter out admin bootstrap account by phone
+  if (adminPhoneRaw) {
+    items = items.filter(u => u.phone.replace(/^\+/, '') !== adminPhoneRaw);
+  }
+  const nextCursor = hasNext ? items[items.length - 1]?.id || null : null;
   res.json({ items, nextCursor });
 });
 

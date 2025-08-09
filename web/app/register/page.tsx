@@ -23,6 +23,11 @@ export default function RegisterPage() {
     if (t) router.replace("/chat");
   }, [router]);
 
+  useEffect(() => {
+    document.documentElement.classList.add('no-scroll');
+    return () => document.documentElement.classList.remove('no-scroll');
+  }, []);
+
   const canSubmit = useMemo(() => {
     return (
       displayName.trim().length >= 1 &&
@@ -59,7 +64,6 @@ export default function RegisterPage() {
         password,
         identityKey,
       });
-      // Do not auto-login; send user to login screen
       router.replace("/chat");
     } catch (err: any) {
       const msg = err?.response?.data?.error || err?.message || "Registration failed";

@@ -3,6 +3,16 @@ import Link from 'next/link';
 export default function LandingPage() {
   return (
     <main className="relative">
+      {/* Top auth bar */}
+      <div className="sticky top-0 z-20 border-b bg-white/80 dark:bg-gray-900/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
+        <div className="max-w-6xl mx-auto h-12 px-4 flex items-center justify-between">
+          <Link href="/" className="font-semibold tracking-tight">Messenger</Link>
+          <div className="flex items-center gap-2">
+            <Link href="/login" className="text-sm px-3 py-1.5 rounded-lg border hover:bg-gray-50 dark:hover:bg-gray-800">Login</Link>
+            <Link href="/register" className="text-sm px-3 py-1.5 rounded-lg bg-blue-600 text-white">Sign up</Link>
+          </div>
+        </div>
+      </div>
       <section className="max-w-6xl mx-auto px-4 py-16 lg:py-24 grid lg:grid-cols-2 gap-10 items-center">
         <div className="space-y-6">
           <h1 className="text-4xl/tight sm:text-5xl/tight font-bold tracking-tight">

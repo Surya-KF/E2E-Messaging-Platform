@@ -19,9 +19,10 @@ model User {
   sessions      Session[]
   messagesSent  Message[] @relation("messagesSent")
   messagesRecv  Message[] @relation("messagesRecv")
-  // Back-relations for 1:1 conversations
   conversationsAsA Conversation[] @relation("AUser")
   conversationsAsB Conversation[] @relation("BUser")
+  // New admin flag
+  isAdmin       Boolean  @default(false)
 }
 
 model Session {

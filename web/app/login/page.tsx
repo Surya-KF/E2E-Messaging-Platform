@@ -19,6 +19,11 @@ export default function LoginPage() {
     if (t) router.replace("/chat");
   }, [router]);
 
+  useEffect(() => {
+    document.documentElement.classList.add('no-scroll');
+    return () => document.documentElement.classList.remove('no-scroll');
+  }, []);
+
   function normalizePhone(v: string) {
     const t = v.trim();
     return t.startsWith("+") ? t : `+${t}`;
@@ -32,7 +37,8 @@ export default function LoginPage() {
       const res = await axios.post(`${API_URL}/auth/login`, { phone: normalizePhone(phone), password });
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("me", JSON.stringify(res.data.user));
-      router.replace("/chat");
+      const dest = res.data.user?.isAdmin ? '/admin' : '/chat';
+      router.replace(dest);
     } catch (err: any) {
       const msg = err?.response?.data?.error || err?.message || "Login failed";
       setError(String(msg));

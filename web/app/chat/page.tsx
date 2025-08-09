@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import axios from "axios";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import ThemeToggle from "../../components/ThemeToggle";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 if (typeof window !== 'undefined') {
@@ -24,6 +25,8 @@ export default function ChatPage() {
   const [msgCursorByPeer, setMsgCursorByPeer] = useState<Record<string, string | null>>({});
   const [msgHasMoreByPeer, setMsgHasMoreByPeer] = useState<Record<string, boolean>>({});
   const [messageText, setMessageText] = useState("");
+
+  const [mobileListCollapsed, setMobileListCollapsed] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -203,27 +206,59 @@ export default function ChatPage() {
 
   return (
     <main className="h-[100dvh] flex flex-col">
+      {/* Header */}
       <header className="px-4 py-3 border-b flex items-center justify-between bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:bg-gray-900/60">
         <div className="flex items-center gap-3">
           <Link href="/" className="font-semibold tracking-tight">Messenger</Link>
-          <span className={`text-xs px-2 py-0.5 rounded-full ${wsReady ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
-            WS {wsReady ? "connected" : "offline"}
-          </span>
+          <span className={`text-xs px-2 py-0.5 rounded-full ${wsReady ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>WS {wsReady ? "connected" : "offline"}</span>
         </div>
-        {me ? (
-          <div className="flex items-center gap-3">
-            <div className="hidden sm:block text-sm text-gray-600 dark:text-gray-300">{me.displayName} ({me.phone})</div>
-            <Avatar name={me.displayName} />
-            <button onClick={logout} className="text-sm px-3 py-1.5 rounded border hover:bg-gray-50 dark:hover:bg-gray-800">Logout</button>
-          </div>
-        ) : null}
+        <div className="flex items-center gap-3">
+          {me ? (
+            <div className="hidden md:flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+              <span>{me.displayName}</span>
+              <span className="opacity-60">{me.phone}</span>
+            </div>
+          ) : null}
+          <ThemeToggle />
+          {me ? <button onClick={logout} className="text-sm px-3 py-1.5 rounded border hover:bg-gray-50 dark:hover:bg-gray-800">Logout</button> : null}
+        </div>
       </header>
 
-      <div className="flex-1 grid grid-cols-[300px_1fr]">
-        {/* Sidebar: Chat list with infinite scroll */}
-        <aside className="border-r flex flex-col bg-white/70 dark:bg-gray-900/60 backdrop-blur">
-          <div className="px-4 py-3 text-xs text-gray-500 border-b">Chats</div>
-          <div ref={chatListRef} className="flex-1 overflow-y-auto">
+      {/* Responsive container: flex on mobile, split on >=sm */}
+      <div className="flex-1 flex sm:grid sm:grid-cols-[280px_1fr] min-h-0">
+        {/* Sidebar */}
+        <aside className={`border-r flex flex-col bg-white/70 dark:bg-gray-900/60 backdrop-blur min-h-0 ${selectedUserId ? 'hidden' : 'flex'} sm:flex`}>          
+          {/* Mobile collapsed bar */}
+          <div className="sm:hidden">
+            {mobileListCollapsed ? (
+              <div className="flex items-center justify-between px-4 py-3 border-b">
+                <Link href="/" className="font-semibold tracking-tight">Messenger</Link>
+                <button
+                  aria-label="Expand chats"
+                  onClick={() => setMobileListCollapsed(false)}
+                  className="text-xs px-2 py-1 rounded-md border hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  Open
+                </button>
+              </div>
+            ) : (
+              <div className="px-4 py-3 text-xs text-gray-500 border-b flex items-center justify-between">
+                <span>Chats</span>
+                <div className="flex items-center gap-2">
+                  {me && <span className="text-[10px] text-gray-400 max-w-[80px] truncate">{me.displayName}</span>}
+                  <button
+                    aria-label="Collapse list"
+                    onClick={() => setMobileListCollapsed(true)}
+                    className="text-[10px] px-2 py-1 rounded-md border hover:bg-gray-50 dark:hover:bg-gray-800"
+                  >
+                    Hide
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+          {/* Chat list scroll area hidden when collapsed on mobile */}
+          <div ref={chatListRef} className={`flex-1 overflow-y-auto ${mobileListCollapsed ? 'hidden sm:block' : ''}`}>            
             {users.length === 0 ? (
               <div className="p-4 text-sm text-gray-500">No other users yet.</div>
             ) : (
@@ -235,9 +270,9 @@ export default function ChatPage() {
                       onClick={() => setSelectedUserId(u.id)}
                     >
                       <Avatar name={u.displayName} />
-                      <div>
-                        <div className="font-medium leading-tight">{u.displayName}</div>
-                        <div className="text-xs text-gray-500">{u.phone}</div>
+                      <div className="truncate">
+                        <div className="font-medium leading-tight truncate">{u.displayName}</div>
+                        <div className="text-xs text-gray-500 truncate">{u.phone}</div>
                       </div>
                     </button>
                   </li>
@@ -254,15 +289,22 @@ export default function ChatPage() {
           </div>
         </aside>
 
-        {/* Conversation Pane with load older */}
-        <section className="flex flex-col bg-gradient-to-b from-gray-50 to-white dark:from-gray-950 dark:to-gray-900">
+        {/* Conversation pane */}
+        <section className={`flex flex-col bg-gradient-to-b from-gray-50 to-white dark:from-gray-950 dark:to-gray-900 min-h-0 ${!selectedUserId ? 'hidden' : 'flex'} sm:flex`}>
           {selectedUser ? (
             <>
               <div className="px-4 py-3 border-b bg-white/70 dark:bg-gray-900/60 backdrop-blur flex items-center gap-3">
+                <button
+                  onClick={() => setSelectedUserId(null)}
+                  className="sm:hidden mr-1 px-2 py-1 rounded-md border text-xs hover:bg-gray-50 dark:hover:bg-gray-800"
+                  aria-label="Back to chats"
+                >
+                  ←
+                </button>
                 <Avatar name={selectedUser.displayName} />
-                <div>
-                  <div className="font-medium">{selectedUser.displayName}</div>
-                  <div className="text-xs text-gray-500">{selectedUser.phone}</div>
+                <div className="min-w-0">
+                  <div className="font-medium truncate max-w-[140px] sm:max-w-none">{selectedUser.displayName}</div>
+                  <div className="text-xs text-gray-500 truncate max-w-[140px] sm:max-w-none">{selectedUser.phone}</div>
                 </div>
               </div>
               <div className="p-2 text-center text-xs">
@@ -283,21 +325,23 @@ export default function ChatPage() {
                   return (
                     <div
                       key={m.id}
-                      className={`max-w-[70%] rounded-2xl px-3 py-2 shadow-sm ${
-                        mine ? "ml-auto bg-blue-600 text-white" : "mr-auto bg-white dark:bg-gray-900 border"
+                      className={`max-w-[85%] sm:max-w-[70%] rounded-2xl px-3 py-2 shadow-sm transition-colors ${
+                        mine
+                          ? "ml-auto bg-blue-600 text-white dark:bg-blue-500"
+                          : "mr-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-800 dark:text-gray-100"
                       }`}
                     >
                       <div className="text-[10px] opacity-70 mb-0.5">
                         {new Date(m.createdAt).toLocaleTimeString()}
                       </div>
-                      <div>{atob(m.ciphertext)}</div>
+                      <div className="whitespace-pre-wrap break-words">{atob(m.ciphertext)}</div>
                     </div>
                   );
                 })}
               </div>
               <div className="p-3 border-t bg-white/70 dark:bg-gray-900/60 backdrop-blur flex gap-2">
                 <input
-                  className="border rounded-xl px-3 py-2 flex-1"
+                  className="border rounded-xl px-3 py-2 flex-1 text-sm"
                   placeholder="Type a message"
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
@@ -309,7 +353,7 @@ export default function ChatPage() {
                   }}
                 />
                 <button
-                  className="px-4 py-2 bg-blue-600 text-white rounded-xl disabled:opacity-50"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-xl disabled:opacity-50 text-sm"
                   onClick={sendMessage}
                   disabled={!wsReady || !messageText.trim()}
                 >
@@ -318,8 +362,11 @@ export default function ChatPage() {
               </div>
             </>
           ) : (
-            <div className="flex-1 grid place-items-center text-gray-500">
-              Select a chat to start messaging.
+            <div className="flex-1 grid place-items-center text-gray-500 text-sm px-6 text-center sm:text-left sm:px-0">
+              <div className="space-y-2">
+                <p className="font-medium">Select a chat to start messaging.</p>
+                <p className="text-xs text-gray-400">Your conversations will appear here. On mobile, tap a user from the list.</p>
+              </div>
             </div>
           )}
         </section>

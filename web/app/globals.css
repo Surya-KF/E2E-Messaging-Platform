@@ -4,6 +4,12 @@
 
 :root { color-scheme: light dark; }
 
+html { background-color: #ffffff; color: #111827; transition: background-color .3s, color .3s; }
+.dark html { background-color: #020617; color: #f1f5f9; }
+body { background: transparent; }
+
+.no-scroll { overflow: hidden; height: 100%; }
+
 html, body, #__next { height: 100%; }
 body {
   background-color: #ffffff;
