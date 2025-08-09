@@ -315,9 +315,5 @@ Bootstrap admin → manage users → delete (safe guard only-admin). Admin link 
 - Search (Postgres full-text or Meilisearch)
 - Multi-device session sync
 
-## 🧪 Testing Strategy
-
-## 📜 License
-MIT (add LICENSE file). Adjust if proprietary needs.
 
 
