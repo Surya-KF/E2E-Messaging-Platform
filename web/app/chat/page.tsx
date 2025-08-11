@@ -287,7 +287,7 @@ export default function ChatPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link href="/" className="text-xl font-bold gradient-text">
-              Messenger
+              E2E
             </Link>
             <div className={`flex items-center gap-1.5 px-2 py-1 rounded-full text-xs font-medium transition-colors ${
               wsReady 
@@ -626,7 +626,7 @@ export default function ChatPage() {
                   <MessageIcon className="w-12 h-12 text-blue-500" />
                 </div>
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-                  Welcome to Messenger
+                  Welcome to E2E
                 </h2>
                 <p className="text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
                   Select a conversation from the sidebar to start chatting. Your messages are secure and encrypted.

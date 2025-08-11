@@ -219,7 +219,7 @@ export default function LandingPage() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 lg:gap-12 mb-12">
               <div className="col-span-2 md:col-span-1">
                 <Link href="/" className="text-2xl font-bold gradient-text">
-                  Messenger
+                  E2E
                 </Link>
                 <p className="mt-4 text-gray-600 dark:text-gray-300 leading-relaxed">
                   Modern messaging platform built for speed, security, and scale.
@@ -265,7 +265,7 @@ export default function LandingPage() {
             <div className="pt-8 border-t border-gray-200/50 dark:border-gray-800/50">
               <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  © {new Date().getFullYear()} Messenger. Built with ❤️ for developers.
+                  © {new Date().getFullYear()} E2E. Built with ❤️ for developers.
                 </p>
                 <div className="flex gap-6">
                   <Link href="#" className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors">
