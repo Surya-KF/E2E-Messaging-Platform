@@ -16,20 +16,9 @@ export default function LandingPage() {
       <div className="pointer-events-none absolute -top-32 -right-24 h-[520px] w-[520px] rounded-full bg-gradient-to-br from-blue-500/30 to-indigo-500/30 blur-3xl animate-[pulse_12s_ease-in-out_infinite] -z-10" />
       <div className="pointer-events-none absolute -bottom-40 -left-40 h-[560px] w-[560px] rounded-full bg-gradient-to-br from-fuchsia-500/25 to-indigo-500/25 blur-3xl animate-[pulse_14s_ease-in-out_infinite] -z-10" />
 
-      {/* Top auth bar */}
-      <div className="sticky top-0 z-30 border-b bg-white/80 dark:bg-gray-900/70 backdrop-blur supports-[backdrop-filter]:bg-white/60">
-        <div className="max-w-7xl mx-auto h-14 px-5 flex items-center justify-between">
-          <Link href="/" className="font-semibold tracking-tight text-lg">Messenger</Link>
-          <div className="flex items-center gap-2">
-            <Link href="/login" className="text-sm px-4 py-2 rounded-lg border bg-white/60 dark:bg-gray-800/60 hover:bg-white dark:hover:bg-gray-800 transition">Login</Link>
-            <Link href="/register" className="text-sm px-4 py-2 rounded-lg bg-blue-600 text-white shadow hover:shadow-md transition">Sign up</Link>
-          </div>
-        </div>
-      </div>
-
       <div className="flex-1 flex flex-col">
         {/* Hero */}
-        <section className="relative max-w-7xl mx-auto px-5 pt-20 pb-24 lg:pt-28 lg:pb-32 grid lg:grid-cols-[1.05fr_.95fr] gap-16 items-center">
+        <section className="relative max-w-6xl mx-auto px-4 pt-20 pb-24 lg:pt-28 lg:pb-32 grid lg:grid-cols-[1.05fr_.95fr] gap-16 items-center">
           <div className="space-y-7 relative z-10">
             <div className="inline-flex items-center gap-2 text-xs px-2.5 py-1 rounded-full border bg-white/70 dark:bg-gray-900/60 backdrop-blur animate-fade-in">
               <span className="h-2 w-2 rounded-full bg-green-500 animate-ping [animation-duration:2s]" /> Live
@@ -65,7 +54,7 @@ export default function LandingPage() {
         </section>
 
         {/* Features */}
-        <section className="relative max-w-7xl mx-auto px-5 pb-24">
+        <section className="relative max-w-6xl mx-auto px-4 pb-24">
           <h2 className="text-xl font-semibold mb-6 tracking-tight">Built for modern messaging</h2>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {features.map((f,i) => (
@@ -86,7 +75,7 @@ export default function LandingPage() {
         </section>
 
         {/* Call to action */}
-        <section className="relative max-w-7xl mx-auto px-5 pb-28">
+        <section className="relative max-w-6xl mx-auto px-4 pb-28">
           <div className="relative overflow-hidden rounded-3xl border bg-gradient-to-br from-gray-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 p-10 sm:p-14 flex flex-col md:flex-row md:items-center gap-10">
             <div className="flex-1 space-y-4">
               <h3 className="text-2xl font-semibold tracking-tight">Deploy your chat stack today</h3>
@@ -109,7 +98,7 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="relative z-10 border-t border-gray-200/60 dark:border-gray-800/60 bg-white/80 dark:bg-gray-900/80 backdrop-blur">
         <div className="absolute inset-x-0 -top-px h-px bg-gradient-to-r from-transparent via-blue-500/40 to-transparent" />
-        <div className="max-w-7xl mx-auto px-5 py-14 lg:py-20 grid gap-10 md:grid-cols-[1.2fr_1fr_1fr_1fr_1fr]">
+        <div className="max-w-6xl mx-auto px-4 py-14 lg:py-20 grid gap-10 md:grid-cols-[1.2fr_1fr_1fr_1fr_1fr]">
           <div className="space-y-4">
             <Link href="/" className="font-semibold tracking-tight text-lg">Messenger</Link>
             <p className="text-sm text-gray-600 dark:text-gray-300 leading-relaxed max-w-xs">Futuristic realtime chat starter. Opinionated infrastructure, minimal lock‑in.</p>
@@ -124,7 +113,7 @@ export default function LandingPage() {
             <FooterCol title="Legal" links={[['Privacy','#'],['Terms','#'],['Security','#'],['License','#']]} />
         </div>
         <div className="border-t border-gray-200/50 dark:border-gray-800/60">
-          <div className="max-w-7xl mx-auto px-5 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500 dark:text-gray-400">
+          <div className="max-w-6xl mx-auto px-4 py-6 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-500 dark:text-gray-400">
             <div className="flex items-center gap-2">
               <span>© {new Date().getFullYear()} Messenger</span>
               <span className="hidden sm:inline">•</span>
