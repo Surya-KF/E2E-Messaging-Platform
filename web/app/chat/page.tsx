@@ -4,10 +4,110 @@ import axios from "axios";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ThemeToggle from "../../components/ThemeToggle";
+import { Send as SendIcon, Mic as MicIcon, Users as UsersIcon, X as XIcon, Square as StopIcon, Trash as TrashIcon, Play as PlayIcon, Pause as PauseIcon, MessageSquare as MessageIcon, Search as SearchIcon, Plus as PlusIcon, Check as CheckIcon, CheckCheck as CheckDoubleIcon, Paperclip as PaperclipIcon, Smile as EmojiIcon } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 if (typeof window !== 'undefined') {
   axios.defaults.baseURL = API_URL;
+}
+
+// Voice Message Component
+function VoiceMessage({ audioData, duration, isOwn }: { audioData: string; duration: number; isOwn: boolean }) {
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(duration || 0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const audio = new Audio(audioData);
+    audioRef.current = audio;
+
+    audio.addEventListener('loadedmetadata', () => {
+      // Only update duration if it wasn't provided or is invalid
+      if (!duration || duration <= 0 || isNaN(duration)) {
+        setAudioDuration(audio.duration);
+      }
+    });
+
+    audio.addEventListener('timeupdate', () => {
+      setCurrentTime(audio.currentTime);
+    });
+
+    audio.addEventListener('ended', () => {
+      setIsPlaying(false);
+      setCurrentTime(0);
+    });
+
+    return () => {
+      audio.pause();
+      audio.src = '';
+    };
+  }, [audioData, duration]);
+
+  const togglePlay = () => {
+    if (!audioRef.current) return;
+
+    if (isPlaying) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play();
+    }
+    setIsPlaying(!isPlaying);
+  };
+
+  const formatTime = (time: number) => {
+    // Handle NaN or invalid time values
+    if (!time || isNaN(time) || time < 0) return '0:00';
+    
+    const minutes = Math.floor(time / 60);
+    const seconds = Math.floor(time % 60);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const progress = audioDuration > 0 ? (currentTime / audioDuration) * 100 : 0;
+
+  return (
+    <div className="flex items-center gap-3 min-w-48">
+      <button
+        onClick={togglePlay}
+        className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+          isOwn 
+            ? 'bg-white/20 hover:bg-white/30 text-white' 
+            : 'bg-blue-500 hover:bg-blue-600 text-white'
+        }`}
+      >
+        {isPlaying ? (
+          <PauseIcon className="w-4 h-4" />
+        ) : (
+          <PlayIcon className="w-4 h-4 ml-0.5" />
+        )}
+      </button>
+      
+      <div className="flex-1">
+        <div className={`h-1 rounded-full overflow-hidden ${
+          isOwn ? 'bg-white/20' : 'bg-gray-300 dark:bg-gray-600'
+        }`}>
+          <div 
+            className={`h-full transition-all duration-150 ${
+              isOwn ? 'bg-white/60' : 'bg-blue-500'
+            }`}
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+        <div className={`text-xs mt-1 ${
+          isOwn ? 'text-white/80' : 'text-gray-500 dark:text-gray-400'
+        }`}>
+          {formatTime(currentTime)} / {formatTime(audioDuration)}
+        </div>
+      </div>
+      
+      <div className="flex items-center gap-1">
+        <MicIcon className={`w-3 h-3 ${
+          isOwn ? 'text-white/60' : 'text-gray-400'
+        }`} />
+      </div>
+    </div>
+  );
 }
 
 export default function ChatPage() {
@@ -29,12 +129,38 @@ export default function ChatPage() {
   const [mobileListCollapsed, setMobileListCollapsed] = useState(false);
   const [typing, setTyping] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+
+  // Global audio state - only one voice message can play at a time
+  const [currentlyPlayingAudio, setCurrentlyPlayingAudio] = useState<HTMLAudioElement | null>(null);
+  const [currentlyPlayingId, setCurrentlyPlayingId] = useState<string | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const chatListRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Function to stop any currently playing audio
+  const stopCurrentAudio = useCallback(() => {
+    if (currentlyPlayingAudio && !currentlyPlayingAudio.paused) {
+      currentlyPlayingAudio.pause();
+      currentlyPlayingAudio.currentTime = 0;
+    }
+    setCurrentlyPlayingAudio(null);
+    setCurrentlyPlayingId(null);
+  }, [currentlyPlayingAudio]);
+
+  // Function to set new playing audio (stops previous one)
+  const setPlayingAudio = useCallback((audio: HTMLAudioElement, messageId: string) => {
+    stopCurrentAudio();
+    setCurrentlyPlayingAudio(audio);
+    setCurrentlyPlayingId(messageId);
+  }, [stopCurrentAudio]);
 
   // Restore session or redirect to /login
   useEffect(() => {
@@ -76,11 +202,37 @@ export default function ChatPage() {
     ws.onmessage = (evt) => {
       const data = JSON.parse(evt.data);
       if (data.type === "ready") return;
-      if (data.type === "message") {
+      if (data.type === "message" || data.type === "voice-message") {
+        // Process the message to determine if it's a voice message
+        let processedMessage = { ...data.message };
+        
+        if (data.message.ciphertext) {
+          try {
+            const decodedContent = decodeURIComponent(escape(atob(data.message.ciphertext)));
+            // Check if it's a voice message (JSON with type: 'voice')
+            try {
+              const parsedContent = JSON.parse(decodedContent);
+              if (parsedContent.type === 'voice') {
+                processedMessage.messageType = 'voice';
+                processedMessage.audioData = parsedContent.audioData;
+                processedMessage.duration = parsedContent.duration;
+              } else {
+                processedMessage.messageType = 'text';
+              }
+            } catch (e) {
+              // If JSON parse fails, it's a regular text message
+              processedMessage.messageType = 'text';
+            }
+          } catch (e) {
+            // If base64 decode fails, use content field
+            processedMessage.messageType = 'text';
+          }
+        }
+        
         setMessages((m) => {
-          const peerId = data.message.senderId === me?.id ? data.message.receiverId : data.message.senderId;
+          const peerId = processedMessage.senderId === me?.id ? processedMessage.receiverId : processedMessage.senderId;
           const list = m[peerId] || [];
-          return { ...m, [peerId]: [...list, data.message] };
+          return { ...m, [peerId]: [...list, processedMessage] };
         });
         try { ws.send(JSON.stringify({ type: "receipt", messageId: data.message.id, kind: "delivered" })); } catch {}
       }
@@ -193,12 +345,136 @@ export default function ChatPage() {
             receiverId: selectedUserId,
             ciphertext,
             createdAt: new Date().toISOString(),
+            messageType: 'text'
           },
         ],
       }));
       setMessageText("");
     } catch {}
   }
+
+  // Voice message functions
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          chunks.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/wav' });
+        setAudioBlob(blob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      mediaRecorderRef.current = mediaRecorder;
+      mediaRecorder.start();
+      setIsRecording(true);
+      setRecordingTime(0);
+
+      // Start recording timer
+      recordingIntervalRef.current = setInterval(() => {
+        setRecordingTime(prev => prev + 1);
+      }, 1000);
+
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      alert('Could not access microphone. Please check permissions.');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+    }
+  };
+
+  const cancelRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      setRecordingTime(0);
+      setAudioBlob(null);
+      
+      if (recordingIntervalRef.current) {
+        clearInterval(recordingIntervalRef.current);
+        recordingIntervalRef.current = null;
+      }
+    }
+  };
+
+  const sendVoiceMessage = async () => {
+    if (!audioBlob || !wsRef.current || !selectedUserId || !me) return;
+
+    try {
+      // Convert blob to base64
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64Audio = reader.result as string;
+        
+        // Create a voice message payload that includes both audio data and metadata
+        const voiceMessageData = {
+          type: 'voice',
+          audioData: base64Audio,
+          duration: recordingTime
+        };
+        
+        // Encode the voice message data as ciphertext (same format as text messages)
+        const ciphertext = btoa(unescape(encodeURIComponent(JSON.stringify(voiceMessageData))));
+
+        // Send voice message through WebSocket using the same format as text messages
+        wsRef.current!.send(JSON.stringify({ 
+          type: "send-message", 
+          toUserId: selectedUserId, 
+          ciphertext
+        }));
+
+        // Add to local messages
+        setMessages((m) => ({
+          ...m,
+          [selectedUserId]: [
+            ...(m[selectedUserId] || []),
+            {
+              id: `local-${Date.now()}`,
+              conversationId: null,
+              senderId: me.id,
+              receiverId: selectedUserId,
+              ciphertext,
+              createdAt: new Date().toISOString(),
+              messageType: 'voice',
+              audioData: base64Audio,
+              duration: recordingTime
+            },
+          ],
+        }));
+
+        // Clean up
+        setAudioBlob(null);
+        setRecordingTime(0);
+      };
+      reader.readAsDataURL(audioBlob);
+    } catch (error) {
+      console.error('Error sending voice message:', error);
+    }
+  };
+
+  // Format recording time
+  const formatRecordingTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   // Typing indicator simulation
   useEffect(() => {
@@ -265,8 +541,34 @@ export default function ChatPage() {
     const msgs = messages[userId] || [];
     if (msgs.length === 0) return null;
     const last = msgs[msgs.length - 1];
+    
+    let text = '';
+    if (last.messageType === 'voice') {
+      text = '🎙️ Voice message';
+    } else if (last.ciphertext) {
+      try {
+        const decodedContent = decodeURIComponent(escape(atob(last.ciphertext)));
+        // Check if it's a voice message encoded as JSON
+        try {
+          const parsedContent = JSON.parse(decodedContent);
+          if (parsedContent.type === 'voice') {
+            text = '🎙️ Voice message';
+          } else {
+            text = decodedContent;
+          }
+        } catch (e) {
+          // If JSON parse fails, it's a regular text message
+          text = decodedContent;
+        }
+      } catch (e) {
+        text = last.content || 'Message content unavailable';
+      }
+    } else {
+      text = last.content || 'Message content unavailable';
+    }
+    
     return {
-      text: decodeURIComponent(escape(atob(last.ciphertext))),
+      text,
       time: new Date(last.createdAt),
       isOwn: last.senderId === me?.id
     };
@@ -487,9 +789,55 @@ export default function ChatPage() {
                               ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white"
                               : "surface-glass text-gray-900 dark:text-gray-100"
                           } ${!showAvatar && isOwn ? 'rounded-br-md' : ''} ${!showAvatar && !isOwn ? 'rounded-bl-md' : ''}`}>
-                            <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
-                              {decodeURIComponent(escape(atob(message.ciphertext)))}
-                            </p>
+                            {(() => {
+                              // Determine if this is a voice message
+                              let isVoiceMessage = false;
+                              let audioData = '';
+                              let duration = 0;
+                              let textContent = '';
+
+                              if (message.messageType === 'voice') {
+                                isVoiceMessage = true;
+                                audioData = message.audioData;
+                                duration = message.duration || 0;
+                              } else if (message.ciphertext) {
+                                try {
+                                  const decodedContent = decodeURIComponent(escape(atob(message.ciphertext)));
+                                  try {
+                                    const parsedContent = JSON.parse(decodedContent);
+                                    if (parsedContent.type === 'voice') {
+                                      isVoiceMessage = true;
+                                      audioData = parsedContent.audioData;
+                                      duration = parsedContent.duration || 0;
+                                    } else {
+                                      textContent = decodedContent;
+                                    }
+                                  } catch (e) {
+                                    textContent = decodedContent;
+                                  }
+                                } catch (e) {
+                                  textContent = message.content || 'Message content unavailable';
+                                }
+                              } else {
+                                textContent = message.content || 'Message content unavailable';
+                              }
+
+                              if (isVoiceMessage) {
+                                return (
+                                  <VoiceMessage 
+                                    audioData={audioData} 
+                                    duration={duration} 
+                                    isOwn={isOwn}
+                                  />
+                                );
+                              } else {
+                                return (
+                                  <p className="text-sm leading-relaxed whitespace-pre-wrap break-words">
+                                    {textContent}
+                                  </p>
+                                );
+                              }
+                            })()}
                             
                             {/* Message status for own messages */}
                             {isOwn && (
@@ -596,25 +944,82 @@ export default function ChatPage() {
                   </div>
                   
                   {/* Voice Message Button */}
-                  <button 
-                    className="btn-ghost p-2 mb-2" 
-                    title="Voice message"
-                  >
-                    <MicIcon className="w-4 h-4" />
-                  </button>
+                  {!isRecording && !audioBlob ? (
+                    <button 
+                      onClick={startRecording}
+                      className="btn-ghost p-2 mb-2" 
+                      title="Record voice message"
+                    >
+                      <MicIcon className="w-4 h-4" />
+                    </button>
+                  ) : null}
                   
-                  <button
-                    onClick={sendMessage}
-                    disabled={!wsReady || !messageText.trim()}
-                    className={`p-3 rounded-2xl transition-all ${
-                      wsReady && messageText.trim()
-                        ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:shadow-xl hover:scale-105"
-                        : "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
-                    }`}
-                    title="Send message"
-                  >
-                    <SendIcon className="w-4 h-4" />
-                  </button>
+                  {/* Recording UI */}
+                  {isRecording && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2 px-3 py-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl">
+                        <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                        <span className="text-sm font-medium text-red-600 dark:text-red-400">
+                          {formatRecordingTime(recordingTime)}
+                        </span>
+                      </div>
+                      <button 
+                        onClick={cancelRecording}
+                        className="btn-ghost p-2"
+                        title="Cancel recording"
+                      >
+                        <XIcon className="w-4 h-4 text-red-500" />
+                      </button>
+                      <button 
+                        onClick={stopRecording}
+                        className="btn-ghost p-2"
+                        title="Stop recording"
+                      >
+                        <StopIcon className="w-4 h-4 text-blue-500" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Audio Preview */}
+                  {audioBlob && !isRecording && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className="flex items-center gap-2 px-3 py-2 surface-glass border border-white/20 dark:border-gray-700/50 rounded-xl">
+                        <MicIcon className="w-4 h-4 text-blue-500" />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">
+                          {formatRecordingTime(recordingTime)}
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => setAudioBlob(null)}
+                        className="btn-ghost p-2"
+                        title="Delete recording"
+                      >
+                        <TrashIcon className="w-4 h-4 text-red-500" />
+                      </button>
+                      <button 
+                        onClick={sendVoiceMessage}
+                        className="btn-primary p-2"
+                        title="Send voice message"
+                      >
+                        <SendIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                  
+                  {!isRecording && !audioBlob && (
+                    <button
+                      onClick={sendMessage}
+                      disabled={!wsReady || !messageText.trim()}
+                      className={`p-3 rounded-2xl transition-all ${
+                        wsReady && messageText.trim()
+                          ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:shadow-xl hover:scale-105"
+                          : "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
+                      }`}
+                      title="Send message"
+                    >
+                      <SendIcon className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             </>
@@ -681,96 +1086,8 @@ function formatMessageTime(date: Date): string {
   }
 }
 
-// Icons
-function MessageIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  );
-}
-
-function SendIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M22 2L11 13" />
-      <path d="m22 2-7 20-4-9-9-4 20-7z" />
-    </svg>
-  );
-}
-
-function SearchIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="11" cy="11" r="8" />
-      <path d="m21 21-4.35-4.35" />
-    </svg>
-  );
-}
-
-function PlusIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M12 5v14" />
-      <path d="M5 12h14" />
-    </svg>
-  );
-}
-
-function CheckIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M20 6L9 17l-5-5" />
-    </svg>
-  );
-}
-
-function CheckDoubleIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M18 6L7 17l-5-5" />
-      <path d="m22 10-7.5 7.5L13 16" />
-    </svg>
-  );
-}
-
-function UsersIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="m22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="m16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  );
-}
-
-function PaperclipIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-    </svg>
-  );
-}
-
-function EmojiIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <circle cx="12" cy="12" r="10" />
-      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
-      <line x1="9" y1="9" x2="9.01" y2="9" />
-      <line x1="15" y1="9" x2="15.01" y2="9" />
-    </svg>
-  );
-}
-
-function MicIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-      <line x1="12" y1="19" x2="12" y2="23" />
-      <line x1="8" y1="23" x2="16" y2="23" />
-    </svg>
-  );
+function formatRecordingTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
