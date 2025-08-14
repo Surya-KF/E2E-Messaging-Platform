@@ -4,11 +4,127 @@ import axios from "axios";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ThemeToggle from "../../components/ThemeToggle";
-import { Send as SendIcon, Mic as MicIcon, Users as UsersIcon, X as XIcon, Square as StopIcon, Trash as TrashIcon, Play as PlayIcon, Pause as PauseIcon, MessageSquare as MessageIcon, Search as SearchIcon, Plus as PlusIcon, Check as CheckIcon, CheckCheck as CheckDoubleIcon, Paperclip as PaperclipIcon, Smile as EmojiIcon } from "lucide-react";
+import { Send as SendIcon, Mic as MicIcon, Users as UsersIcon, X as XIcon, Square as StopIcon, Trash as TrashIcon, Play as PlayIcon, Pause as PauseIcon, MessageSquare as MessageIcon, Search as SearchIcon, Plus as PlusIcon, Check as CheckIcon, CheckCheck as CheckDoubleIcon, Paperclip as PaperclipIcon, Smile as EmojiIcon, File as FileIcon, Image as ImageIcon, Video as VideoIcon, Music as MusicIcon, Download as DownloadIcon } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 if (typeof window !== 'undefined') {
   axios.defaults.baseURL = API_URL;
+}
+
+// File Attachment Component
+function FileAttachment({ fileUrl, fileName, fileType, fileSize, mimeType, isOwn }: { 
+  fileUrl: string; 
+  fileName: string; 
+  fileType: string; 
+  fileSize?: number; 
+  mimeType: string;
+  isOwn: boolean;
+}) {
+  const getFileIcon = () => {
+    if (fileType === 'image') return <ImageIcon className="w-4 h-4" />;
+    if (fileType === 'video') return <VideoIcon className="w-4 h-4" />;
+    if (fileType === 'audio') return <MusicIcon className="w-4 h-4" />;
+    return <FileIcon className="w-4 h-4" />;
+  };
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return '';
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const handleDownload = () => {
+    const link = document.createElement('a');
+    link.href = `${API_URL}${fileUrl}`;
+    link.download = fileName;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  if (fileType === 'image') {
+    return (
+      <div className="max-w-xs">
+        <img 
+          src={`${API_URL}${fileUrl}`} 
+          alt={fileName}
+          className="rounded-lg max-w-full h-auto cursor-pointer hover:opacity-80 transition-opacity"
+          onClick={() => window.open(`${API_URL}${fileUrl}`, '_blank')}
+        />
+        <div className={`text-xs mt-1 ${isOwn ? 'text-white/80' : 'text-gray-500'}`}>
+          {fileName}
+        </div>
+      </div>
+    );
+  }
+
+  if (fileType === 'video') {
+    return (
+      <div className="max-w-xs">
+        <video 
+          controls 
+          className="rounded-lg max-w-full"
+          src={`${API_URL}${fileUrl}`}
+        >
+          Your browser does not support the video tag.
+        </video>
+        <div className={`text-xs mt-1 ${isOwn ? 'text-white/80' : 'text-gray-500'}`}>
+          {fileName} • {formatFileSize(fileSize)}
+        </div>
+      </div>
+    );
+  }
+
+  if (fileType === 'audio') {
+    return (
+      <div className="min-w-64">
+        <audio 
+          controls 
+          className="w-full"
+          src={`${API_URL}${fileUrl}`}
+        >
+          Your browser does not support the audio tag.
+        </audio>
+        <div className={`text-xs mt-1 ${isOwn ? 'text-white/80' : 'text-gray-500'}`}>
+          {fileName} • {formatFileSize(fileSize)}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div 
+      onClick={handleDownload}
+      className={`flex items-center gap-3 p-3 rounded-lg border-2 border-dashed cursor-pointer hover:opacity-80 transition-opacity min-w-64 ${
+        isOwn 
+          ? 'border-white/20 bg-white/10' 
+          : 'border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-800'
+      }`}
+    >
+      <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+        isOwn ? 'bg-white/20' : 'bg-gray-200 dark:bg-gray-700'
+      }`}>
+        {getFileIcon()}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className={`font-medium truncate text-sm ${
+          isOwn ? 'text-white' : 'text-gray-900 dark:text-gray-100'
+        }`}>
+          {fileName}
+        </div>
+        <div className={`text-xs ${
+          isOwn ? 'text-white/70' : 'text-gray-500 dark:text-gray-400'
+        }`}>
+          {formatFileSize(fileSize)} • Click to download
+        </div>
+      </div>
+      <DownloadIcon className={`w-4 h-4 ${
+        isOwn ? 'text-white/60' : 'text-gray-400'
+      }`} />
+    </div>
+  );
 }
 
 // Voice Message Component
@@ -132,6 +248,9 @@ export default function ChatPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [attachedFile, setAttachedFile] = useState<any>(null);
+  const [uploading, setUploading] = useState(false);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
 
   // Global audio state - only one voice message can play at a time
   const [currentlyPlayingAudio, setCurrentlyPlayingAudio] = useState<HTMLAudioElement | null>(null);
@@ -142,6 +261,12 @@ export default function ChatPage() {
   const chatListRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
+  const audioInputRef = useRef<HTMLInputElement | null>(null);
+  const documentInputRef = useRef<HTMLInputElement | null>(null);
+  const attachmentMenuRef = useRef<HTMLDivElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -203,10 +328,13 @@ export default function ChatPage() {
       const data = JSON.parse(evt.data);
       if (data.type === "ready") return;
       if (data.type === "message" || data.type === "voice-message") {
-        // Process the message to determine if it's a voice message
+        // Process the message to determine if it's a voice message or file
         let processedMessage = { ...data.message };
         
-        if (data.message.ciphertext) {
+        if (data.message.mediaUrl) {
+          // It's a file attachment
+          processedMessage.messageType = 'file';
+        } else if (data.message.ciphertext) {
           try {
             const decodedContent = decodeURIComponent(escape(atob(data.message.ciphertext)));
             // Check if it's a voice message (JSON with type: 'voice')
@@ -353,6 +481,132 @@ export default function ChatPage() {
     } catch {}
   }
 
+  // File upload functions
+  const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>, fileCategory?: string) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type based on category
+    if (fileCategory) {
+      const fileType = file.type.toLowerCase();
+      const fileName = file.name.toLowerCase();
+      
+      let isValidType = false;
+      
+      switch (fileCategory) {
+        case 'image':
+          isValidType = fileType.startsWith('image/') || 
+                       /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/.test(fileName);
+          break;
+        case 'video':
+          isValidType = fileType.startsWith('video/') || 
+                       /\.(mp4|avi|mkv|mov|wmv|flv|webm|m4v)$/.test(fileName);
+          break;
+        case 'audio':
+          isValidType = fileType.startsWith('audio/') || 
+                       /\.(mp3|wav|ogg|aac|flac|m4a|wma)$/.test(fileName);
+          break;
+        case 'document':
+          isValidType = fileType.includes('pdf') || 
+                       fileType.includes('document') || 
+                       fileType.includes('text') ||
+                       fileType.includes('spreadsheet') ||
+                       fileType.includes('presentation') ||
+                       /\.(pdf|doc|docx|txt|rtf|odt|xls|xlsx|ppt|pptx|zip|rar|7z)$/.test(fileName);
+          break;
+        default:
+          isValidType = true;
+      }
+      
+      if (!isValidType) {
+        const categoryNames = {
+          image: 'images',
+          video: 'videos', 
+          audio: 'audio files',
+          document: 'documents'
+        };
+        alert(`Please select a valid ${categoryNames[fileCategory as keyof typeof categoryNames]} file.`);
+        event.target.value = ''; // Reset file input
+        return;
+      }
+    }
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await axios.post('/upload', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      });
+
+      if (response.data.success) {
+        setAttachedFile({
+          ...response.data.file,
+          originalFile: file,
+        });
+        setShowAttachmentMenu(false);
+      }
+    } catch (error) {
+      console.error('File upload error:', error);
+      alert('Failed to upload file. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeAttachedFile = () => {
+    setAttachedFile(null);
+    // Reset all file inputs
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (imageInputRef.current) imageInputRef.current.value = '';
+    if (videoInputRef.current) videoInputRef.current.value = '';
+    if (audioInputRef.current) audioInputRef.current.value = '';
+    if (documentInputRef.current) documentInputRef.current.value = '';
+  };
+
+  const sendFileMessage = () => {
+    if (!wsRef.current || !selectedUserId || !me || !attachedFile) return;
+
+    try {
+      wsRef.current.send(JSON.stringify({
+        type: "send-message",
+        toUserId: selectedUserId,
+        ciphertext: '', // Empty ciphertext for file messages
+        mediaUrl: attachedFile.url,
+        mediaType: attachedFile.mimeType,
+        fileName: attachedFile.originalName,
+        fileSize: attachedFile.size,
+      }));
+
+      setMessages((m) => ({
+        ...m,
+        [selectedUserId]: [
+          ...(m[selectedUserId] || []),
+          {
+            id: `local-${Date.now()}`,
+            conversationId: null,
+            senderId: me.id,
+            receiverId: selectedUserId,
+            ciphertext: '',
+            mediaUrl: attachedFile.url,
+            mediaType: attachedFile.mimeType,
+            fileName: attachedFile.originalName,
+            fileSize: attachedFile.size,
+            createdAt: new Date().toISOString(),
+            messageType: 'file'
+          },
+        ],
+      }));
+
+      removeAttachedFile();
+    } catch (error) {
+      console.error('Error sending file message:', error);
+    }
+  };
+
   // Voice message functions
   const startRecording = async () => {
     try {
@@ -485,22 +739,25 @@ export default function ChatPage() {
     }
   }, [messageText]);
 
-  // Close emoji picker when clicking outside
+  // Close emoji picker and attachment menu when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
         setShowEmojiPicker(false);
       }
+      if (attachmentMenuRef.current && !attachmentMenuRef.current.contains(event.target as Node)) {
+        setShowAttachmentMenu(false);
+      }
     }
 
-    if (showEmojiPicker) {
+    if (showEmojiPicker || showAttachmentMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showEmojiPicker]);
+  }, [showEmojiPicker, showAttachmentMenu]);
 
   const emojis = [
     '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣', '😊', '😇',
@@ -545,6 +802,21 @@ export default function ChatPage() {
     let text = '';
     if (last.messageType === 'voice') {
       text = '🎙️ Voice message';
+    } else if (last.messageType === 'file' || last.mediaUrl) {
+      // Determine file type icon
+      if (last.mediaType?.startsWith('image/')) {
+        text = '📷 Photo';
+      } else if (last.mediaType?.startsWith('video/')) {
+        text = '🎥 Video';
+      } else if (last.mediaType?.startsWith('audio/')) {
+        text = '🎵 Audio';
+      } else if (last.mediaType?.includes('pdf')) {
+        text = '📄 PDF';
+      } else if (last.mediaType?.includes('document')) {
+        text = '📄 Document';
+      } else {
+        text = '📎 File';
+      }
     } else if (last.ciphertext) {
       try {
         const decodedContent = decodeURIComponent(escape(atob(last.ciphertext)));
@@ -790,13 +1062,17 @@ export default function ChatPage() {
                               : "surface-glass text-gray-900 dark:text-gray-100"
                           } ${!showAvatar && isOwn ? 'rounded-br-md' : ''} ${!showAvatar && !isOwn ? 'rounded-bl-md' : ''}`}>
                             {(() => {
-                              // Determine if this is a voice message
+                              // Determine message type and content
                               let isVoiceMessage = false;
+                              let isFileMessage = false;
                               let audioData = '';
                               let duration = 0;
                               let textContent = '';
 
-                              if (message.messageType === 'voice') {
+                              // Check if it's a file message
+                              if (message.messageType === 'file' || message.mediaUrl) {
+                                isFileMessage = true;
+                              } else if (message.messageType === 'voice') {
                                 isVoiceMessage = true;
                                 audioData = message.audioData;
                                 duration = message.duration || 0;
@@ -822,7 +1098,22 @@ export default function ChatPage() {
                                 textContent = message.content || 'Message content unavailable';
                               }
 
-                              if (isVoiceMessage) {
+                              if (isFileMessage) {
+                                const fileType = message.mediaType?.startsWith('image/') ? 'image' :
+                                                message.mediaType?.startsWith('video/') ? 'video' :
+                                                message.mediaType?.startsWith('audio/') ? 'audio' : 'file';
+                                
+                                return (
+                                  <FileAttachment
+                                    fileUrl={message.mediaUrl}
+                                    fileName={message.fileName || 'Unknown file'}
+                                    fileType={fileType}
+                                    fileSize={message.fileSize}
+                                    mimeType={message.mediaType || ''}
+                                    isOwn={isOwn}
+                                  />
+                                );
+                              } else if (isVoiceMessage) {
                                 return (
                                   <VoiceMessage 
                                     audioData={audioData} 
@@ -861,14 +1152,180 @@ export default function ChatPage() {
 
               {/* Message Input */}
               <div className="surface-glass border-t border-white/10 p-4">
+                {/* Attached file preview */}
+                {attachedFile && (
+                  <div className="mb-4 p-3 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-white/20 dark:border-gray-700/50">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
+                          {attachedFile.type === 'image' ? <ImageIcon className="w-5 h-5 text-white" /> :
+                           attachedFile.type === 'video' ? <VideoIcon className="w-5 h-5 text-white" /> :
+                           attachedFile.type === 'audio' ? <MusicIcon className="w-5 h-5 text-white" /> :
+                           <FileIcon className="w-5 h-5 text-white" />}
+                        </div>
+                        <div>
+                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                            {attachedFile.originalName}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {(attachedFile.size / 1024 / 1024).toFixed(2)} MB
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={removeAttachedFile}
+                        className="btn-ghost p-2"
+                        title="Remove attachment"
+                      >
+                        <XIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-end gap-3 relative">
                   {/* Attachment Button */}
-                  <button 
-                    className="btn-ghost p-2 mb-2" 
-                    title="Attach file"
-                  >
-                    <PaperclipIcon className="w-4 h-4" />
-                  </button>
+                  <div className="relative">
+                    <button 
+                      onClick={() => setShowAttachmentMenu(!showAttachmentMenu)}
+                      className="btn-ghost p-2 mb-2" 
+                      title="Attach file"
+                      disabled={uploading}
+                    >
+                      <PaperclipIcon className={`w-4 h-4 ${uploading ? 'animate-spin' : ''}`} />
+                    </button>
+                    
+                    {/* Attachment Menu */}
+                    {showAttachmentMenu && (
+                      <div 
+                        ref={attachmentMenuRef}
+                        className="absolute bottom-full left-0 mb-2 w-48 surface-glass border border-white/20 dark:border-gray-700/50 rounded-2xl shadow-2xl overflow-hidden z-50"
+                      >
+                        <div className="p-2">
+                          <button
+                            onClick={() => {
+                              documentInputRef.current?.click();
+                              setShowAttachmentMenu(false);
+                            }}
+                            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                          >
+                            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
+                              <FileIcon className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                Document
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                PDF, DOC, TXT, ZIP
+                              </div>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => {
+                              imageInputRef.current?.click();
+                              setShowAttachmentMenu(false);
+                            }}
+                            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                          >
+                            <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
+                              <ImageIcon className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                Photos
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                JPG, PNG, GIF, WEBP
+                              </div>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => {
+                              videoInputRef.current?.click();
+                              setShowAttachmentMenu(false);
+                            }}
+                            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                          >
+                            <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
+                              <VideoIcon className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                Videos
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                MP4, AVI, MOV, WEBM
+                              </div>
+                            </div>
+                          </button>
+                          <button
+                            onClick={() => {
+                              audioInputRef.current?.click();
+                              setShowAttachmentMenu(false);
+                            }}
+                            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                          >
+                            <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center">
+                              <MusicIcon className="w-4 h-4 text-white" />
+                            </div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                Audio
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                MP3, WAV, OGG, AAC
+                              </div>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Hidden file inputs for each category */}
+                    <input
+                      ref={documentInputRef}
+                      type="file"
+                      onChange={(e) => handleFileSelect(e, 'document')}
+                      accept=".pdf,.doc,.docx,.txt,.rtf,.odt,.xls,.xlsx,.ppt,.pptx,.zip,.rar,.7z,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,application/zip"
+                      className="hidden"
+                      disabled={uploading}
+                    />
+                    <input
+                      ref={imageInputRef}
+                      type="file"
+                      onChange={(e) => handleFileSelect(e, 'image')}
+                      accept="image/*,.jpg,.jpeg,.png,.gif,.webp,.svg,.bmp"
+                      className="hidden"
+                      disabled={uploading}
+                    />
+                    <input
+                      ref={videoInputRef}
+                      type="file"
+                      onChange={(e) => handleFileSelect(e, 'video')}
+                      accept="video/*,.mp4,.avi,.mkv,.mov,.wmv,.flv,.webm,.m4v"
+                      className="hidden"
+                      disabled={uploading}
+                    />
+                    <input
+                      ref={audioInputRef}
+                      type="file"
+                      onChange={(e) => handleFileSelect(e, 'audio')}
+                      accept="audio/*,.mp3,.wav,.ogg,.aac,.flac,.m4a,.wma"
+                      className="hidden"
+                      disabled={uploading}
+                    />
+                    
+                    {/* General file input (kept for backward compatibility) */}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      onChange={(e) => handleFileSelect(e)}
+                      accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.zip,.rar"
+                      className="hidden"
+                      disabled={uploading}
+                    />
+                  </div>
                   
                   <div className="flex-1 relative">
                     <input
@@ -1008,14 +1465,20 @@ export default function ChatPage() {
                   
                   {!isRecording && !audioBlob && (
                     <button
-                      onClick={sendMessage}
-                      disabled={!wsReady || !messageText.trim()}
+                      onClick={() => {
+                        if (attachedFile) {
+                          sendFileMessage();
+                        } else {
+                          sendMessage();
+                        }
+                      }}
+                      disabled={!wsReady || (!messageText.trim() && !attachedFile)}
                       className={`p-3 rounded-2xl transition-all ${
-                        wsReady && messageText.trim()
+                        wsReady && (messageText.trim() || attachedFile)
                           ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg hover:shadow-xl hover:scale-105"
                           : "bg-gray-200 dark:bg-gray-700 text-gray-400 cursor-not-allowed"
                       }`}
-                      title="Send message"
+                      title={attachedFile ? "Send file" : "Send message"}
                     >
                       <SendIcon className="w-4 h-4" />
                     </button>

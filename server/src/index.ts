@@ -9,6 +9,10 @@ import { PrismaClient } from '@prisma/client';
 import Redis from 'ioredis';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
+import mime from 'mime-types';
 
 const logger = pino({ level: process.env.LOG_LEVEL || 'info' });
 const app = express();
@@ -17,9 +21,79 @@ const wss = new WebSocketServer({ server });
 const prisma = new PrismaClient();
 const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(process.cwd(), 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, uploadsDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    const ext = path.extname(file.originalname);
+    cb(null, file.fieldname + '-' + uniqueSuffix + ext);
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit
+  },
+  fileFilter: function (req, file, cb) {
+    // Define allowed file types by category
+    const allowedMimeTypes = {
+      images: ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml', 'image/bmp'],
+      videos: ['video/mp4', 'video/avi', 'video/quicktime', 'video/x-msvideo', 'video/webm', 'video/x-flv'],
+      audio: ['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/aac', 'audio/flac', 'audio/x-wav'],
+      documents: [
+        'application/pdf',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'text/plain', 
+        'text/rtf',
+        'application/rtf',
+        'application/zip',
+        'application/x-rar-compressed',
+        'application/x-7z-compressed',
+        'application/vnd.ms-excel',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-powerpoint',
+        'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+      ]
+    };
+
+    const allAllowedTypes = [
+      ...allowedMimeTypes.images,
+      ...allowedMimeTypes.videos,
+      ...allowedMimeTypes.audio,
+      ...allowedMimeTypes.documents
+    ];
+
+    // Check file extension as backup
+    const allowedExtensions = /\.(jpg|jpeg|png|gif|webp|svg|bmp|mp4|avi|mov|wmv|webm|mp3|wav|ogg|aac|flac|pdf|doc|docx|txt|rtf|zip|rar|7z|xls|xlsx|ppt|pptx)$/i;
+    
+    const hasAllowedMimeType = allAllowedTypes.includes(file.mimetype.toLowerCase());
+    const hasAllowedExtension = allowedExtensions.test(file.originalname.toLowerCase());
+    
+    if (hasAllowedMimeType || hasAllowedExtension) {
+      return cb(null, true);
+    } else {
+      cb(new Error(`File type "${file.mimetype}" is not supported. Please upload images, videos, audio files, or documents only.`));
+    }
+  }
+});
+
 app.use(cors());
 app.use(express.json());
 app.use(pinoHttp());
+
+// Serve uploaded files
+app.use('/uploads', express.static(uploadsDir));
 
 // Basic health
 app.get('/health', async (_req, res) => {
@@ -141,6 +215,56 @@ function auth(req: express.Request, res: express.Response, next: express.NextFun
   }
 }
 
+// File upload endpoint
+app.post('/upload', auth, upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const { originalname, filename, mimetype, size } = req.file;
+    const fileUrl = `/uploads/${filename}`;
+    
+    // Get file type category with more precise detection
+    let fileType = 'file';
+    const mimeType = mimetype.toLowerCase();
+    const fileName = originalname.toLowerCase();
+    
+    if (mimeType.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg|bmp)$/.test(fileName)) {
+      fileType = 'image';
+    } else if (mimeType.startsWith('video/') || /\.(mp4|avi|mov|wmv|webm|mkv|flv|m4v)$/.test(fileName)) {
+      fileType = 'video';
+    } else if (mimeType.startsWith('audio/') || /\.(mp3|wav|ogg|aac|flac|m4a|wma)$/.test(fileName)) {
+      fileType = 'audio';
+    } else if (
+      mimeType.includes('pdf') || 
+      mimeType.includes('document') || 
+      mimeType.includes('text') ||
+      mimeType.includes('spreadsheet') ||
+      mimeType.includes('presentation') ||
+      mimeType.includes('zip') ||
+      /\.(pdf|doc|docx|txt|rtf|odt|xls|xlsx|ppt|pptx|zip|rar|7z)$/.test(fileName)
+    ) {
+      fileType = 'document';
+    }
+
+    res.json({
+      success: true,
+      file: {
+        originalName: originalname,
+        fileName: filename,
+        url: fileUrl,
+        mimeType: mimetype,
+        size: size,
+        type: fileType
+      }
+    });
+  } catch (error: any) {
+    logger.error(error, 'File upload error');
+    res.status(500).json({ error: 'Upload failed: ' + error.message });
+  }
+});
+
 // Admin guard
 async function requireAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const userId = (req as any).userId as string;
@@ -248,6 +372,8 @@ app.get('/conversations/:peerId/messages', auth, async (req, res) => {
     senderId: m.senderId,
     receiverId: m.receiverId,
     ciphertext: (m.ciphertext as any as Buffer).toString('base64'),
+    mediaUrl: m.mediaUrl,
+    mediaType: m.mediaType,
     createdAt: m.createdAt,
     deliveredAt: m.deliveredAt,
     readAt: m.readAt,
@@ -305,9 +431,9 @@ wss.on('connection', (ws, req) => {
       const msg = JSON.parse(String(raw));
       switch (msg.type) {
         case 'send-message': {
-          // msg: { type, toUserId, conversationId?, ciphertext(base64), dedupeKey? }
-          const { toUserId, conversationId, ciphertext, dedupeKey } = msg;
-          if (!toUserId || !ciphertext) return;
+          // msg: { type, toUserId, conversationId?, ciphertext(base64), dedupeKey?, mediaUrl?, mediaType?, fileName?, fileSize? }
+          const { toUserId, conversationId, ciphertext, dedupeKey, mediaUrl, mediaType, fileName, fileSize } = msg;
+          if (!toUserId || (!ciphertext && !mediaUrl)) return;
           let convId = conversationId as string | undefined;
           if (!convId) {
             // ensure conversation exists
@@ -323,7 +449,9 @@ wss.on('connection', (ws, req) => {
               senderId: userId!,
               receiverId: toUserId,
               conversationId: convId!,
-              ciphertext: Buffer.from(ciphertext, 'base64'),
+              ciphertext: ciphertext ? Buffer.from(ciphertext, 'base64') : Buffer.from(''),
+              mediaUrl,
+              mediaType,
               dedupeKey,
             },
           });
@@ -335,6 +463,10 @@ wss.on('connection', (ws, req) => {
               senderId: created.senderId,
               receiverId: created.receiverId,
               ciphertext,
+              mediaUrl,
+              mediaType,
+              fileName,
+              fileSize,
               createdAt: created.createdAt,
             },
           });
