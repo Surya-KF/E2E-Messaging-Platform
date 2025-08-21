@@ -498,6 +498,114 @@ wss.on('connection', (ws, req) => {
           if (update.senderId !== userId) sendToUser(update.senderId, { type: 'receipt', messageId, kind });
           break;
         }
+        case 'call-offer': {
+          // msg: { type, toUserId, offer, callerName }
+          const { toUserId, offer, callerName } = msg;
+          if (!toUserId || !offer) return;
+          sendToUser(toUserId, {
+            type: 'call-offer',
+            fromUserId: userId,
+            offer,
+            callerName
+          });
+          break;
+        }
+        case 'call-answer': {
+          // msg: { type, toUserId, answer }
+          const { toUserId, answer } = msg;
+          if (!toUserId || !answer) return;
+          sendToUser(toUserId, {
+            type: 'call-answer',
+            fromUserId: userId,
+            answer
+          });
+          break;
+        }
+        case 'call-reject': {
+          // msg: { type, toUserId }
+          const { toUserId } = msg;
+          if (!toUserId) return;
+          sendToUser(toUserId, {
+            type: 'call-reject',
+            fromUserId: userId
+          });
+          break;
+        }
+        case 'call-end': {
+          // msg: { type, toUserId }
+          const { toUserId } = msg;
+          if (!toUserId) return;
+          sendToUser(toUserId, {
+            type: 'call-end',
+            fromUserId: userId
+          });
+          break;
+        }
+        case 'ice-candidate': {
+          // msg: { type, toUserId, candidate }
+          const { toUserId, candidate } = msg;
+          if (!toUserId || !candidate) return;
+          sendToUser(toUserId, {
+            type: 'ice-candidate',
+            fromUserId: userId,
+            candidate
+          });
+          break;
+        }
+        case 'call-offer': {
+          // msg: { type, toUserId, offer, callerName }
+          const { toUserId, offer, callerName } = msg;
+          if (!toUserId || !offer) return;
+          sendToUser(toUserId, {
+            type: 'call-offer',
+            fromUserId: userId,
+            offer,
+            callerName
+          });
+          break;
+        }
+        case 'call-answer': {
+          // msg: { type, toUserId, answer }
+          const { toUserId, answer } = msg;
+          if (!toUserId || !answer) return;
+          sendToUser(toUserId, {
+            type: 'call-answer',
+            fromUserId: userId,
+            answer
+          });
+          break;
+        }
+        case 'call-reject': {
+          // msg: { type, toUserId }
+          const { toUserId } = msg;
+          if (!toUserId) return;
+          sendToUser(toUserId, {
+            type: 'call-reject',
+            fromUserId: userId
+          });
+          break;
+        }
+        case 'call-end': {
+          // msg: { type, toUserId }
+          const { toUserId } = msg;
+          if (!toUserId) return;
+          sendToUser(toUserId, {
+            type: 'call-end',
+            fromUserId: userId
+          });
+          break;
+        }
+        case 'ice-candidate': {
+          // msg: { type, toUserId, candidate }
+          const { toUserId, candidate } = msg;
+          if (!toUserId || !candidate) return;
+          sendToUser(toUserId, {
+            type: 'ice-candidate',
+            fromUserId: userId,
+            candidate
+          });
+          break;
+        }
         default:
           break;
       }

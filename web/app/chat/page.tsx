@@ -4,7 +4,8 @@ import axios from "axios";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import ThemeToggle from "../../components/ThemeToggle";
-import { Send as SendIcon, Mic as MicIcon, Users as UsersIcon, X as XIcon, Square as StopIcon, Trash as TrashIcon, Play as PlayIcon, Pause as PauseIcon, MessageSquare as MessageIcon, Search as SearchIcon, Plus as PlusIcon, Check as CheckIcon, CheckCheck as CheckDoubleIcon, Paperclip as PaperclipIcon, Smile as EmojiIcon, File as FileIcon, Image as ImageIcon, Video as VideoIcon, Music as MusicIcon, Download as DownloadIcon } from "lucide-react";
+import AudioCall from "../../components/AudioCall";
+import { Send as SendIcon, Mic as MicIcon, Users as UsersIcon, X as XIcon, Square as StopIcon, Trash as TrashIcon, Play as PlayIcon, Pause as PauseIcon, MessageSquare as MessageIcon, Search as SearchIcon, Plus as PlusIcon, Check as CheckIcon, CheckCheck as CheckDoubleIcon, Paperclip as PaperclipIcon, Smile as EmojiIcon, File as FileIcon, Image as ImageIcon, Video as VideoIcon, Music as MusicIcon, Download as DownloadIcon, Phone as PhoneIcon } from "lucide-react";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:4000";
 if (typeof window !== 'undefined') {
@@ -252,6 +253,14 @@ export default function ChatPage() {
   const [uploading, setUploading] = useState(false);
   const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
 
+  // Audio call state
+  const [showAudioCall, setShowAudioCall] = useState(false);
+  const [incomingCall, setIncomingCall] = useState<{
+    callerId: string;
+    callerName: string;
+    offer?: RTCSessionDescriptionInit;
+  } | null>(null);
+
   // Global audio state - only one voice message can play at a time
   const [currentlyPlayingAudio, setCurrentlyPlayingAudio] = useState<HTMLAudioElement | null>(null);
   const [currentlyPlayingId, setCurrentlyPlayingId] = useState<string | null>(null);
@@ -410,6 +419,18 @@ export default function ChatPage() {
           if (exists || data.user.id === me?.id) return prev;
           return [data.user, ...prev];
         });
+      }
+      // Handle incoming call
+      if (data.type === "call-offer") {
+        setIncomingCall({
+          callerId: data.fromUserId,
+          callerName: data.callerName,
+          offer: data.offer
+        });
+      }
+      // Handle call events (these will be processed by the AudioCall component)
+      if (data.type === "call-answer" || data.type === "call-reject" || data.type === "call-end" || data.type === "ice-candidate") {
+        // These are handled by the AudioCall component through its own WebSocket listener
       }
     };
     return () => ws.close();
@@ -789,6 +810,27 @@ export default function ChatPage() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // Audio call functions
+  const startAudioCall = useCallback(() => {
+    if (!selectedUserId) return;
+    setShowAudioCall(true);
+  }, [selectedUserId]);
+
+  const handleAcceptCall = useCallback(() => {
+    if (!incomingCall) return;
+    setSelectedUserId(incomingCall.callerId);
+    setShowAudioCall(true);
+    setIncomingCall(null);
+  }, [incomingCall]);
+
+  const handleRejectCall = useCallback(() => {
+    setIncomingCall(null);
+  }, []);
+
+  const handleCloseCall = useCallback(() => {
+    setShowAudioCall(false);
+  }, []);
+
   // Typing indicator simulation
   useEffect(() => {
     if (messageText.length > 0) {
@@ -1086,6 +1128,13 @@ export default function ChatPage() {
                       {typing ? "typing..." : selectedUser.phone}
                     </p>
                   </div>
+                  <button
+                    onClick={startAudioCall}
+                    className="btn-ghost p-2 hover:bg-purple-200 dark:hover:bg-gray-700/50"
+                    title="Start audio call"
+                  >
+                    <PhoneIcon className="w-5 h-5" />
+                  </button>
                 </div>
               </div>
 
@@ -1599,6 +1648,33 @@ export default function ChatPage() {
           )}
         </main>
       </div>
+
+      {/* Audio Call Component */}
+      {showAudioCall && selectedUserId && (
+        <AudioCall
+          isVisible={showAudioCall}
+          onClose={handleCloseCall}
+          recipientName={selectedUser?.displayName || 'Unknown'}
+          recipientId={selectedUserId}
+          wsRef={wsRef}
+          me={me}
+        />
+      )}
+
+      {/* Incoming Call Notification */}
+      {incomingCall && (
+        <AudioCall
+          isVisible={true}
+          onClose={handleRejectCall}
+          recipientName={incomingCall.callerName}
+          recipientId={incomingCall.callerId}
+          wsRef={wsRef}
+          me={me}
+          isIncoming={true}
+          onAccept={handleAcceptCall}
+          onReject={handleRejectCall}
+        />
+      )}
     </div>
   );
 }
