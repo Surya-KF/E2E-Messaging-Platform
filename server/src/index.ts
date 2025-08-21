@@ -100,6 +100,21 @@ app.get('/health', async (_req, res) => {
   res.json({ ok: true });
 });
 
+// Auth verification endpoint
+app.get('/auth/verify', auth, async (req, res) => {
+  const userId = (req as any).userId as string;
+  try {
+    const user = await prisma.user.findUnique({ 
+      where: { id: userId }, 
+      select: { id: true, phone: true, displayName: true, isAdmin: true } 
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ valid: true, user });
+  } catch (error) {
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+
 // Auth schemas
 const RegisterSchema = z.object({
   phone: z.string().min(6),

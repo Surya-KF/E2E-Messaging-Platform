@@ -293,7 +293,16 @@ export default function ChatPage() {
     const m = localStorage.getItem("me");
     if (t && m) {
       setToken(t);
-      try { setMe(JSON.parse(m)); } catch {}
+      try { 
+        setMe(JSON.parse(m)); 
+        // Set axios header immediately when restoring session
+        axios.defaults.headers.common["Authorization"] = `Bearer ${t}`;
+      } catch {
+        // Clear corrupted data
+        localStorage.removeItem("token");
+        localStorage.removeItem("me");
+        router.replace('/login');
+      }
     } else {
       router.replace('/login');
     }
@@ -304,6 +313,28 @@ export default function ChatPage() {
     if (token) axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
     else delete axios.defaults.headers.common["Authorization"];
   }, [token]);
+
+  // Add axios response interceptor for global 401 handling
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        if (error.response?.status === 401) {
+          // Token is invalid or expired
+          localStorage.removeItem("token");
+          localStorage.removeItem("me");
+          setToken(null);
+          setMe(null);
+          router.replace('/login');
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
+  }, [router]);
 
   const selectedUser = useMemo(() => users.find((u) => u.id === selectedUserId) || null, [users, selectedUserId]);
   const conversationMessages = useMemo(() => {
@@ -384,6 +415,24 @@ export default function ChatPage() {
     return () => ws.close();
   }, [token, me?.id]);
 
+  // Token validation function
+  const validateToken = useCallback(async () => {
+    if (!token) return false;
+    try {
+      // Test the token by making an authenticated request
+      await axios.get('/auth/verify');
+      return true;
+    } catch (error: any) {
+      console.log('Token validation failed:', error);
+      // Clear invalid token
+      localStorage.removeItem("token");
+      localStorage.removeItem("me");
+      setToken(null);
+      setMe(null);
+      return false;
+    }
+  }, [token]);
+
   // Fetch chat list paginated
   const loadUsers = useCallback(async () => {
     if (!token || loadingUsers || !usersHasMore) return;
@@ -395,14 +444,24 @@ export default function ChatPage() {
       setUsersHasMore(Boolean(data.nextCursor));
     } catch (err: any) {
       const status = err?.response?.status;
-      if (status === 401) router.replace('/login');
       if (status === 404) setUsersHasMore(false);
+      console.error('Error loading users:', err);
     } finally {
       setLoadingUsers(false);
     }
   }, [token, usersCursor, usersHasMore, loadingUsers, router]);
 
-  useEffect(() => { if (token) loadUsers(); }, [token]);
+  useEffect(() => { 
+    if (token && me) {
+      validateToken().then((valid) => {
+        if (valid) {
+          loadUsers();
+        } else {
+          router.replace('/login');
+        }
+      });
+    }
+  }, [token, me, validateToken, loadUsers, router]);
 
   // Infinite scroll for users list
   useEffect(() => {
