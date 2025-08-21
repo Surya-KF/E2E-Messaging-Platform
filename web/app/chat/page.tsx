@@ -844,7 +844,7 @@ export default function ChatPage() {
 
   const Avatar = ({ name, online = false }: { name: string; online?: boolean }) => (
     <div className="relative">
-      <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500 text-white grid place-items-center text-sm font-semibold shadow-lg">
+      <div className={`h-10 w-10 rounded-full text-white grid place-items-center text-sm font-semibold shadow-lg ${getAvatarGradient(name)}`}>
         {name?.[0]?.toUpperCase() || "?"}
       </div>
       {online && (
@@ -905,6 +905,26 @@ export default function ChatPage() {
     };
   };
 
+  // Generate different gradient combinations for avatars
+  const getAvatarGradient = (name: string) => {
+    const gradients = [
+      'bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500',
+      'bg-gradient-to-br from-green-500 via-teal-500 to-blue-500',
+      'bg-gradient-to-br from-purple-500 via-pink-500 to-red-500',
+      'bg-gradient-to-br from-orange-500 via-red-500 to-pink-500',
+      'bg-gradient-to-br from-teal-500 via-green-500 to-emerald-500',
+      'bg-gradient-to-br from-indigo-500 via-purple-500 to-blue-500',
+      'bg-gradient-to-br from-rose-500 via-pink-500 to-purple-500',
+      'bg-gradient-to-br from-cyan-500 via-blue-500 to-indigo-500',
+      'bg-gradient-to-br from-amber-500 via-orange-500 to-red-500',
+      'bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500'
+    ];
+    
+    // Use the name to consistently pick a gradient
+    const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return gradients[hash % gradients.length];
+  };
+
   // If not authenticated, render nothing (we redirect)
   if (!token) return null;
 
@@ -952,11 +972,11 @@ export default function ChatPage() {
       {/* Main Chat Container */}
       <div className="flex-1 flex relative z-10 min-h-0">
         {/* Sidebar - Chat List */}
-        <aside className={`w-full sm:w-80 surface-glass border-r border-white/10 flex flex-col ${
+        <aside className={`w-full sm:w-80 bg-blue-100/95 dark:bg-slate-900/95 backdrop-blur-xl border-r border-blue-300/80 dark:border-slate-700/50 flex flex-col shadow-lg ${
           selectedUserId ? 'hidden sm:flex' : 'flex'
         }`}>
           {/* Chat List Header */}
-          <div className="p-4 border-b border-white/10">
+          <div className="p-4 border-b border-blue-300/80 dark:border-slate-700/50 bg-blue-200/90 dark:bg-slate-800/50">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Chats</h2>
               <div className="flex items-center gap-2">
@@ -974,10 +994,10 @@ export default function ChatPage() {
           <div ref={chatListRef} className="flex-1 overflow-y-auto">
             {users.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full p-6 text-center">
-                <div className="w-16 h-16 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 dark:from-gray-700 dark:to-gray-600 flex items-center justify-center mb-4">
-                  <UsersIcon className="w-8 h-8 text-gray-400" />
+                <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 dark:from-blue-900/30 dark:via-purple-900/30 dark:to-pink-900/30 flex items-center justify-center mb-6 shadow-lg">
+                  <UsersIcon className="w-10 h-10 text-blue-500 dark:text-blue-400" />
                 </div>
-                <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-2">No conversations yet</h3>
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-2 text-lg">No conversations yet</h3>
                 <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs">
                   Start chatting by selecting a user from your contacts
                 </p>
@@ -989,10 +1009,10 @@ export default function ChatPage() {
                   return (
                     <li key={user.id}>
                       <button
-                        className={`w-full text-left p-3 rounded-xl hover:bg-white/50 dark:hover:bg-gray-800/50 transition-all duration-200 ${
+                        className={`w-full text-left p-4 rounded-2xl transition-all duration-300 transform hover:scale-[1.02] hover:shadow-lg ${
                           selectedUserId === user.id 
-                            ? "bg-white/70 dark:bg-gray-800/70 shadow-sm" 
-                            : ""
+                            ? "bg-indigo-200/90 dark:bg-indigo-900/30 shadow-xl border border-indigo-400 dark:border-indigo-700/50" 
+                            : "bg-blue-200/70 dark:bg-slate-800/40 hover:bg-blue-300/80 dark:hover:bg-slate-700/60 backdrop-blur-sm"
                         }`}
                         onClick={() => setSelectedUserId(user.id)}
                       >
@@ -1044,11 +1064,11 @@ export default function ChatPage() {
         </aside>
 
         {/* Main Chat Area */}
-        <main className={`flex-1 flex flex-col ${!selectedUserId ? 'hidden sm:flex' : 'flex'}`}>
+        <main className={`flex-1 flex flex-col bg-green-100/80 dark:bg-gray-900/50 ${!selectedUserId ? 'hidden sm:flex' : 'flex'}`}>
           {selectedUser ? (
             <>
               {/* Chat Header */}
-              <div className="surface-glass border-b border-white/10 p-4">
+              <div className="bg-purple-100/95 dark:bg-gray-800/90 backdrop-blur-xl border-b border-purple-300/70 dark:border-gray-600/50 p-4 shadow-sm">
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setSelectedUserId(null)}
@@ -1210,10 +1230,11 @@ export default function ChatPage() {
               </div>
 
               {/* Message Input */}
-              <div className="surface-glass border-t border-white/10 p-4">
+              <div className="bg-gray-300
+               dark:bg-gray-800 backdrop-blur-xl border-t border-gray-300/70 dark:border-gray-600/50 p-4 shadow-lg">
                 {/* Attached file preview */}
                 {attachedFile && (
-                  <div className="mb-4 p-3 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-white/20 dark:border-gray-700/50">
+                  <div className="mb-4 p-3 bg-teal-100 dark:bg-gray-700/50 rounded-lg border border-teal-300 dark:border-gray-600/50 shadow-sm">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
@@ -1258,7 +1279,7 @@ export default function ChatPage() {
                     {showAttachmentMenu && (
                       <div 
                         ref={attachmentMenuRef}
-                        className="absolute bottom-full left-0 mb-2 w-48 surface-glass border border-white/20 dark:border-gray-700/50 rounded-2xl shadow-2xl overflow-hidden z-50"
+                        className="absolute bottom-full left-0 mb-2 w-52 bg-rose-100 dark:bg-gray-700 backdrop-blur-xl border border-rose-300 dark:border-gray-600 rounded-3xl shadow-2xl overflow-hidden z-50"
                       >
                         <div className="p-2">
                           <button
@@ -1266,13 +1287,13 @@ export default function ChatPage() {
                               documentInputRef.current?.click();
                               setShowAttachmentMenu(false);
                             }}
-                            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                            className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-blue-200 dark:hover:bg-blue-900/20 transition-all duration-200 text-left group"
                           >
-                            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center">
-                              <FileIcon className="w-4 h-4 text-white" />
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                              <FileIcon className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                                 Document
                               </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -1285,13 +1306,13 @@ export default function ChatPage() {
                               imageInputRef.current?.click();
                               setShowAttachmentMenu(false);
                             }}
-                            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                            className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-emerald-200 dark:hover:bg-green-900/20 transition-all duration-200 text-left group"
                           >
-                            <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center">
-                              <ImageIcon className="w-4 h-4 text-white" />
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                              <ImageIcon className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                                 Photos
                               </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -1304,13 +1325,13 @@ export default function ChatPage() {
                               videoInputRef.current?.click();
                               setShowAttachmentMenu(false);
                             }}
-                            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                            className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-red-200 dark:hover:bg-red-900/20 transition-all duration-200 text-left group"
                           >
-                            <div className="w-8 h-8 rounded-full bg-red-500 flex items-center justify-center">
-                              <VideoIcon className="w-4 h-4 text-white" />
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-red-500 to-pink-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                              <VideoIcon className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                                 Videos
                               </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -1323,13 +1344,13 @@ export default function ChatPage() {
                               audioInputRef.current?.click();
                               setShowAttachmentMenu(false);
                             }}
-                            className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-white/50 dark:hover:bg-gray-800/50 transition-colors text-left"
+                            className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-purple-200 dark:hover:bg-purple-900/20 transition-all duration-200 text-left group"
                           >
-                            <div className="w-8 h-8 rounded-full bg-purple-500 flex items-center justify-center">
-                              <MusicIcon className="w-4 h-4 text-white" />
+                            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                              <MusicIcon className="w-5 h-5 text-white" />
                             </div>
                             <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                                 Audio
                               </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -1415,9 +1436,9 @@ export default function ChatPage() {
                     {showEmojiPicker && (
                       <div 
                         ref={emojiPickerRef}
-                        className="absolute bottom-full right-0 mb-2 w-80 max-h-64 surface-glass border border-white/20 dark:border-gray-700/50 rounded-2xl shadow-2xl overflow-hidden z-50"
+                        className="absolute bottom-full right-0 mb-2 w-80 max-h-64 bg-yellow-100 dark:bg-gray-700 border border-yellow-300 dark:border-gray-600 rounded-2xl shadow-2xl overflow-hidden z-50"
                       >
-                        <div className="p-3 border-b border-white/10">
+                        <div className="p-3 border-b border-yellow-400 dark:border-gray-600">
                           <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                             Choose an emoji
                           </h3>
@@ -1427,7 +1448,7 @@ export default function ChatPage() {
                             {emojis.map((emoji, index) => (
                               <button
                                 key={index}
-                                className="w-8 h-8 flex items-center justify-center text-lg hover:bg-white/50 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
+                                className="w-8 h-8 flex items-center justify-center text-lg hover:bg-yellow-200 dark:hover:bg-gray-600/50 rounded-lg transition-colors"
                                 onClick={() => {
                                   addEmoji(emoji);
                                   setShowEmojiPicker(false);
@@ -1549,17 +1570,17 @@ export default function ChatPage() {
             /* Empty State */
             <div className="flex-1 flex items-center justify-center p-8">
               <div className="text-center max-w-md">
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-600/20 flex items-center justify-center mx-auto mb-6">
-                  <MessageIcon className="w-12 h-12 text-blue-500" />
+                <div className="w-28 h-28 rounded-full bg-gradient-to-br from-blue-400/30 via-purple-500/30 to-pink-400/30 flex items-center justify-center mx-auto mb-8 shadow-2xl">
+                  <MessageIcon className="w-14 h-14 text-blue-600 dark:text-blue-400" />
                 </div>
-                <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+                <h2 className="text-3xl font-bold bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent mb-4">
                   Welcome to E2E
                 </h2>
-                <p className="text-gray-600 dark:text-gray-300 mb-6 leading-relaxed">
+                <p className="text-gray-600 dark:text-gray-300 mb-8 leading-relaxed text-lg">
                   Select a conversation from the sidebar to start chatting. Your messages are secure and encrypted.
                 </p>
-                <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                  <button className="btn-primary">
+                <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                  <button className="btn-primary bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all duration-200">
                     <PlusIcon className="w-4 h-4 mr-2" />
                     New Chat
                   </button>
